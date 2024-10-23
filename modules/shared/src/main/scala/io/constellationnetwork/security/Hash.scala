@@ -1,6 +1,7 @@
 package io.constellationnetwork.security
 
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 import cats.Show
 
@@ -30,6 +31,41 @@ object hash {
 
     def fromBytes(bytes: Array[Byte]): Hash =
       Hash(hashCodeFromBytes(bytes).toString)
+
+    private val hexDigits = "0123456789abcdef".toCharArray
+    private val sha256 = MessageDigest.getInstance("SHA-256")
+
+    def sha256FromBytesClone(bytes: Array[Byte]): Array[Byte] = {
+      val md = sha256.clone().asInstanceOf[MessageDigest]
+      md.update(bytes)
+      md.digest()
+    }
+
+    def sha256FromBytesGetInstance(bytes: Array[Byte]): Array[Byte] = {
+      val md = MessageDigest.getInstance("SHA-256")
+      md.update(bytes)
+      md.digest()
+    }
+
+    def fromBytesJSAClone(bytes: Array[Byte]): Hash = {
+      val sha256Bytes = sha256FromBytesClone(bytes)
+      val sha256String = sha256Bytes
+        .foldLeft(new StringBuilder(64)) { (sb, b) =>
+          sb.append(hexDigits((b >> 4) & 0xf)).append(hexDigits(b & 0xf))
+        }
+        .toString
+      Hash(sha256String)
+    }
+
+    def fromBytesJSAGetInstance(bytes: Array[Byte]): Hash = {
+      val sha256Bytes = sha256FromBytesGetInstance(bytes)
+      val sha256String = sha256Bytes
+        .foldLeft(new StringBuilder(64)) { (sb, b) =>
+          sb.append(hexDigits((b >> 4) & 0xf)).append(hexDigits(b & 0xf))
+        }
+        .toString
+      Hash(sha256String)
+    }
 
     def empty: Hash = Hash(s"%064d".format(0))
 
