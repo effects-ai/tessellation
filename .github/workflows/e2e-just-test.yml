@@ -88,7 +88,20 @@ jobs:
   e2e-test:
     name: E2E - ${{ matrix.test-group.name }}
     needs: build
-    runs-on: ${{ matrix.test-group.runner || 'Ubuntu-22-64-core' }}
+    # `tessellation-e2e` is a self-hosted runner pool on Hetzner Cloud, replacing
+    # the GitHub-hosted `Ubuntu-22-64-core` larger runner ($0.162/min, ~$2k/mo).
+    #
+    # This workflow is deliberately agnostic to WHICH pool serves the label —
+    # deploy/ci-runners/ ships two interchangeable implementations (autoscaled
+    # ephemeral servers, or a fixed always-on pool) and both register under this
+    # same label. Fleet shape (server type, count, location) is infrastructure
+    # config, not workflow config. See deploy/ci-runners/README.md.
+    #
+    # ROLLBACK: set the repository variable E2E_RUNNER_LABEL to
+    # `Ubuntu-22-64-core` to move every job back to GitHub-hosted runners
+    # immediately, with no PR and no rerun of in-flight work. Unset it to return
+    # to the Hetzner fleet.
+    runs-on: ${{ matrix.test-group.runner || vars.E2E_RUNNER_LABEL || 'tessellation-e2e' }}
     timeout-minutes: ${{ matrix.test-group.timeout || 30 }}
 
     strategy:
@@ -99,7 +112,9 @@ jobs:
           - { name: delegated-staking,      tests: "delegated-staking" }
           - { name: token-lock-replacement, tests: "token-lock-replacement" }
           # TODO: re-enable once PR #1485 is merged
-          # - { name: fork-recovery,          tests: "fork-recovery", extra-args: "--num-gl0=5", runner: "Ubuntu-22-64-core" }
+          # fork-recovery runs 5 gl0 nodes instead of 3, so it needs a bigger box
+          # than the fleet default — hence the explicit type-* label override.
+          # - { name: fork-recovery,          tests: "fork-recovery", extra-args: "--num-gl0=5", runner: "tessellation-e2e-large" }
           - { name: currency,               tests: "currency" }
           - { name: rewards,                tests: "rewards" }
           - { name: token-locks,            tests: "token-locks" }
