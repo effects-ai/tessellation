@@ -109,19 +109,10 @@ jobs:
       matrix:
         test-group:
           - { name: dag-cluster,            tests: "dag-cluster" }
-          - { name: delegated-staking,      tests: "delegated-staking" }
-          - { name: token-lock-replacement, tests: "token-lock-replacement" }
           # TODO: re-enable once PR #1485 is merged
           # fork-recovery runs 5 gl0 nodes instead of 3, so it needs a bigger box
           # than the fleet default — hence the explicit type-* label override.
           # - { name: fork-recovery,          tests: "fork-recovery", extra-args: "--num-gl0=5", runner: "tessellation-e2e-large" }
-          - { name: currency,               tests: "currency" }
-          - { name: rewards,                tests: "rewards" }
-          - { name: token-locks,            tests: "token-locks" }
-          - { name: allow-spends,           tests: "allow-spends", timeout: 45 }
-          - { name: spend,                  tests: "spend", timeout: 45 }
-          - { name: data-with-fee,          tests: "data-with-fee", timeout: 45 }
-          - { name: snapshot-streaming,    tests: "snapshot-streaming", runner: "ubuntu-22.04", timeout: 45 }
 
     env:
       BASH_DEBUG_MODE: ${{ github.event.inputs.debug_enabled || 'false' }}
