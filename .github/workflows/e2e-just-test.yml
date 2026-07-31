@@ -108,7 +108,7 @@ jobs:
       fail-fast: false
       matrix:
         test-group:
-          - { name: dag-cluster,            tests: "dag-cluster" }
+          - { name: currency,               tests: "currency" }
           # TODO: re-enable once PR #1485 is merged
           # fork-recovery runs 5 gl0 nodes instead of 3, so it needs a bigger box
           # than the fleet default — hence the explicit type-* label override.
