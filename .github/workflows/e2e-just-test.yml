@@ -108,7 +108,7 @@ jobs:
       fail-fast: false
       matrix:
         test-group:
-          - { name: currency,               tests: "currency" }
+          - { name: allow-spends,           tests: "allow-spends", timeout: 45 }
           # TODO: re-enable once PR #1485 is merged
           # fork-recovery runs 5 gl0 nodes instead of 3, so it needs a bigger box
           # than the fleet default — hence the explicit type-* label override.
