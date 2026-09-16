@@ -1,0 +1,83 @@
+# Smoke test for the on-demand Hetzner runner fleet.
+#
+# Exercises the FULL lifecycle — autoscaler sees a queued job, creates a cpx62,
+# runs scripts/setup.sh, installs and registers the actions runner, runs this
+# job, powers off, gets reaped — in ~2 minutes for about EUR 0.25.
+#
+# Run this BEFORE pointing the E2E matrix at the fleet. A scale-up failure is
+# silent: the autoscaler logs it, retries every 30s indefinitely, and never
+# reports back to GitHub, while Hetzner rounds every partial hour UP. Finding
+# out via a 12-group matrix costs real money and a lot of confusion.
+#
+# The assertions below are the ONLY thing that verifies
+# deploy/ci-runners/autoscaled/scripts/setup.sh actually ran. That file executes
+# only on a freshly created runner, so nothing else in the repo covers it.
+name: Runner smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Runner label to target'
+        type: string
+        required: false
+        default: 'tessellation-e2e'
+
+jobs:
+  smoke:
+    name: Verify an ephemeral runner is correctly provisioned
+    runs-on: ${{ inputs.runner_label || 'tessellation-e2e' }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Report what we landed on
+        run: |
+          echo "host:   $(hostname)"
+          echo "cores:  $(nproc)"
+          free -h
+          swapon --show || echo "NO SWAP"
+          df -h /
+          echo "steal since boot:"
+          awk '/^cpu /{t=0; for(i=2;i<=NF;i++) t+=$i; printf "  %.4f%%\n", $9*100/t}' /proc/stat
+
+      - name: Assert the server type is what config.yaml asks for
+        run: |
+          cores=$(nproc); mem=$(free -g | awk '/^Mem:/{print $2}')
+          echo "cores=$cores mem=${mem}G (expecting cpx62: 16 cores / ~31 GB)"
+          [ "$cores" -eq 16 ] || { echo "::error::expected 16 cores, got $cores"; exit 1; }
+          [ "$mem" -ge 30 ] || { echo "::error::expected ~31 GB, got ${mem}G"; exit 1; }
+
+      - name: Assert setup.sh provisioned the swap backstop
+        run: |
+          # Without this, an overshoot OOM-kills the runner agent and the job
+          # reports `cancelled` with no usable log. This is the single most
+          # important assertion here: cpx62 is 32 GB and the heaviest E2E group
+          # peaked at 29.7 GB.
+          swapon --show
+          sz=$(swapon --show=SIZE --noheadings --bytes | head -1)
+          [ -n "$sz" ] || { echo "::error::no swap — setup.sh did not run"; exit 1; }
+          gb=$(( sz / 1024 / 1024 / 1024 ))
+          echo "swap = ${gb}G"
+          [ "$gb" -ge 15 ] || { echo "::error::expected 16G swap, got ${gb}G"; exit 1; }
+
+      - name: Assert setup.sh applied the kernel limits
+        run: |
+          fail=0
+          check() {
+            actual=$(sysctl -n "$1")
+            if [ "$actual" = "$2" ]; then echo "  OK   $1 = $actual"
+            else echo "::error::$1 = $actual, expected $2"; fail=1; fi
+          }
+          # max_map_count is the one that actually bites: ~15 JVMs plus docker's
+          # overlay mounts exhaust the 65530 default and the JVM dies with
+          # "Native memory allocation (mmap) failed" long before RAM runs out.
+          check vm.max_map_count 262144
+          check vm.swappiness 10
+          check vm.vfs_cache_pressure 50
+          check net.core.somaxconn 4096
+          exit $fail
+
+      - name: Assert docker is usable by the runner user
+        run: |
+          docker version --format '  client {{.Client.Version}} / server {{.Server.Version}}'
+          docker run --rm hello-world >/dev/null && echo "  OK   docker run works as $(whoami)"
