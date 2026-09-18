@@ -77,6 +77,22 @@ jobs:
           check net.core.somaxconn 4096
           exit $fail
 
+      - name: Assert the CLI tools workflows expect are present
+        run: |
+          # GitHub's hosted images ship both. On a stock Ubuntu box jq is absent
+          # and curl comes from the docker-ce image rather than anything we
+          # control, so setup.sh installs them explicitly and this proves it.
+          fail=0
+          for t in curl jq; do
+            if command -v "$t" >/dev/null 2>&1; then
+              echo "  OK   $t -> $(command -v $t)  [$($t --version 2>&1 | head -1)]"
+            else
+              echo "::error::$t is missing"; fail=1
+            fi
+          done
+          echo '{"probe":"ok"}' | jq -e '.probe == "ok"' >/dev/null && echo "  OK   jq parses JSON"
+          exit $fail
+
       - name: Assert docker is usable by the runner user
         run: |
           docker version --format '  client {{.Client.Version}} / server {{.Server.Version}}'
